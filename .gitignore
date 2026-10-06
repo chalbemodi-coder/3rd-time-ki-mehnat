@@ -1,0 +1,9 @@
+.env
+__pycache__/
+test.py
+venv/
+
+# Private Telegram user session
+.telegram_session
+*.session
+*.session-journal
