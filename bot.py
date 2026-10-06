@@ -24,7 +24,12 @@ from datetime import datetime, timedelta, timezone
 from traceback import format_exc
 
 from telethon import Button, TelegramClient, events, utils
-from telethon.errors import SessionPasswordNeededError
+from telethon.errors import (
+    PasswordHashInvalidError,
+    PhoneCodeExpiredError,
+    PhoneCodeInvalidError,
+    SessionPasswordNeededError,
+)
 from telethon.sessions import StringSession
 from telethon.tl.functions.messages import ExportChatInviteRequest
 from telethon.tl.types import UpdateBotChatInviteRequester
@@ -236,21 +241,31 @@ async def _session_input(event):
     state = _session_login.get("state")
     try:
         if state == "phone":
-            sent = await client.send_code_request(value)
-            _session_login.update({"phone": value, "phone_code_hash": sent.phone_code_hash, "state": "code"})
-            return await event.reply("📩 Telegram code भेजें।")
+            phone = re.sub(r"[^0-9+]", "", value)
+            sent = await client.send_code_request(phone)
+            _session_login.update({"phone": phone, "phone_code_hash": sent.phone_code_hash, "state": "code"})
+            return await event.reply("📩 Telegram code भेजें। Spaces हों तो भी चलेगा।")
         if state == "code":
+            code = re.sub(r"\D", "", value)
             try:
                 await client.sign_in(
                     phone=_session_login["phone"],
-                    code=value,
+                    code=code,
                     phone_code_hash=_session_login["phone_code_hash"],
                 )
             except SessionPasswordNeededError:
                 _session_login["state"] = "password"
                 return await event.reply("🔑 2FA password भेजें।")
+            except PhoneCodeInvalidError:
+                return await event.reply("❌ OTP गलत है। नया OTP मांगे बिना वही current code फिर भेजें।")
+            except PhoneCodeExpiredError:
+                _session_login.clear()
+                return await event.reply("❌ OTP expire हो गया। फिर `/sessionlogin` चलाएँ और नया code डालें।")
         elif state == "password":
-            await client.sign_in(password=value)
+            try:
+                await client.sign_in(password=value)
+            except PasswordHashInvalidError:
+                return await event.reply("❌ 2FA password गलत है। सही password फिर भेजें।")
         else:
             return
         session_string = client.session.save()
