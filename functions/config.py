@@ -64,4 +64,6 @@ class Var:
         cast=str,
     )
     NYAA_CHECK_INTERVAL = config("NYAA_CHECK_INTERVAL", default=300, cast=int)
+    NYAA_MAX_AGE_DAYS = config("NYAA_MAX_AGE_DAYS", default=1, cast=int)
+    NYAA_TODAY_ONLY = config("NYAA_TODAY_ONLY", default=True, cast=bool)
     DELETE_FILES_FROM_PMS = config("DELETE_FILES_FROM_PMS", default=True, cast=bool)

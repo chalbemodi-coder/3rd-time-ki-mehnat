@@ -1,0 +1,11 @@
+.env
+.telegram_session
+*.session
+*.session-journal
+.git
+.gitignore
+__pycache__/
+*.pyc
+downloads/
+encode/
+thumbs/

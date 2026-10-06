@@ -2,12 +2,16 @@
 import asyncio
 import hashlib
 import re
+import time
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from traceback import format_exc
 
 import aiohttp
 from feedparser import parse
 
 from database import LOGS, DataBase
+from functions.config import Var
 
 
 class Nyaa:
@@ -19,6 +23,8 @@ class Nyaa:
         self.db = db
         self.feed_url = feed_url
         self.interval = max(60, interval)
+        self.max_age_days = max(1, Var.NYAA_MAX_AGE_DAYS)
+        self.today_only = Var.NYAA_TODAY_ONLY
         self.started_with_480 = False
 
     @staticmethod
@@ -32,6 +38,9 @@ class Nyaa:
         if any(word in value for word in blocked):
             return False
         if re.search(r"\b(raw|esub|subbed)[ -]?only\b", value):
+            return False
+        # This worker is for episodes, not old movies or season collections.
+        if not re.search(r"\bS?\d{1,2}\s*E\d{1,3}\b|\bE\d{1,3}\b", value):
             return False
         return True
 
@@ -86,22 +95,33 @@ class Nyaa:
             quality_rank = self._quality_rank(title)
             if quality_rank > 3:  # Ignore 360p/unknown; supported range starts at 480p.
                 continue
+            published = getattr(entry, "published_parsed", None)
+            if published:
+                published_dt = datetime.fromtimestamp(
+                    time.mktime(published), timezone.utc
+                ).astimezone(ZoneInfo("Asia/Kolkata"))
+                if self.today_only:
+                    if published_dt.date() != datetime.now(ZoneInfo("Asia/Kolkata")).date():
+                        continue
+                elif time.time() - time.mktime(published) > self.max_age_days * 86400:
+                    continue
             uid = hashlib.sha256(info_hash.encode()).hexdigest()
             if await self.db.is_anime_uploaded(uid):
                 continue
             # Lower quality is intentionally selected first; 4K is last.
-            candidates.append((quality_rank, entry))
+            published_ts = time.mktime(getattr(entry, "published_parsed", time.gmtime(0)))
+            candidates.append((quality_rank, -published_ts, entry))
         if not candidates:
             return None
         # Never begin at 720p/1080p: wait until an unprocessed 480p release exists.
         # Once the first 480p has been processed, continue in ascending quality order.
         if not self.started_with_480:
-            if not any(rank == 0 for rank, _ in candidates):
+            if not any(rank == 0 for rank, _, _ in candidates):
                 return None
             selected_rank = 0
         else:
-            selected_rank = min(rank for rank, _ in candidates)
-        entry = next(entry for rank, entry in candidates if rank == selected_rank)
+            selected_rank = min(rank for rank, _, _ in candidates)
+        entry = next(entry for rank, _, entry in candidates if rank == selected_rank)
         title = entry.title.strip()
         info_hash = entry.nyaa_infohash.strip().lower()
         return {

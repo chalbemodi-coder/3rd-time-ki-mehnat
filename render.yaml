@@ -1,0 +1,28 @@
+services:
+  - type: worker
+    name: autoanimebot
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeploy: true
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: API_ID
+        sync: false
+      - key: API_HASH
+        sync: false
+      - key: MONGO_SRV
+        sync: false
+      - key: MAIN_CHANNEL
+        sync: false
+      - key: LOG_CHANNEL
+        sync: false
+      - key: CLOUD_CHANNEL
+        sync: false
+      - key: OWNER
+        sync: false
+      - key: SESSION
+        sync: false
+      - key: SESSION_FILE
+        value: /var/data/.telegram_session

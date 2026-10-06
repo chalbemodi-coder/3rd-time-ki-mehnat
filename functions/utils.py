@@ -121,7 +121,7 @@ class AdminUtils:
             )
 
     async def _sep_c_t(self, e):
-        if Var.SESSION:
+        if self.bot.user_client:
             if await self.db.is_button_upload():
                 if await self.db.is_separate_channel_upload():
                     await self.db.toggle_separate_channel_upload()

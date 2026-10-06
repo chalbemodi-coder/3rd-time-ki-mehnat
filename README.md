@@ -99,6 +99,8 @@
 - `CRF` - Less CRF == High Quality, More Size , More CRF == Low Quality, Less Size, CRF Range = 20-51.
 - `NYAA_FEED_URL` - Nyaa RSS feed for Hindi-audio releases (default: `q=hindi&c=1_2&f=0`).
 - `NYAA_CHECK_INTERVAL` - Nyaa polling interval in seconds; default is `300`.
+- `NYAA_MAX_AGE_DAYS` - Fallback age limit when today-only mode is disabled.
+- `NYAA_TODAY_ONLY` - Process only releases published today in IST; default is `True`.
 
 ### Nyaa source behavior
 The bot uses Nyaa's English-translated RSS feed with a Hindi filter, accepts Hindi Audio/Hindi Dub/Multi-Audio titles, skips batch/raw-only/subtitle-only releases, and requires an unprocessed 480p release to start, then downloads qualities in this order: 480p, 720p, 1080p, and optionally 2160p/4K. The torrent info-hash is stored in MongoDB to prevent repeat downloads.
@@ -116,6 +118,14 @@ The bot uses Nyaa's English-translated RSS feed with a Hindi filter, accepts Hin
 ## Commands
 
 [![Comand](https://files.catbox.moe/utcf3f.jpg)](https://github.com/your-username/AutoAnimeBot/)
+
+### Render / Railway deployment
+The repository includes `Dockerfile`, `render.yaml`, `railway.json`, `Procfile`, and `.dockerignore`. Both platforms run the bot as a worker with `bash run.sh`; no web port is required. Add the required environment variables in the platform dashboard—never commit `.env` or `.telegram_session`.
+
+Required variables:
+`BOT_TOKEN`, `API_ID`, `API_HASH`, `MONGO_SRV`, `MAIN_CHANNEL`, `LOG_CHANNEL`, `CLOUD_CHANNEL`, and `OWNER`. Keep `SESSION` empty if using the owner-only `/sessionlogin` flow.
+
+For Render, the session path is `/var/data/.telegram_session`; attach a persistent disk at `/var/data` if you need the runtime session to survive restarts. For Railway, add a persistent volume mounted at `/var/data` and set `SESSION_FILE=/var/data/.telegram_session`, or set `SESSION` manually after generating a session.
 
 ### Owner-only Telegram session login
 The user session can be logged in from the owner's private chat without putting the session string in GitHub:
