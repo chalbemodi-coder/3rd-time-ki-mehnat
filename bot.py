@@ -25,7 +25,9 @@ from traceback import format_exc
 
 from telethon import Button, TelegramClient, events, utils
 from telethon.errors import (
+    FloodWaitError,
     PasswordHashInvalidError,
+    PhoneNumberInvalidError,
     PhoneCodeExpiredError,
     PhoneCodeInvalidError,
     SessionPasswordNeededError,
@@ -242,11 +244,17 @@ async def _session_input(event):
     try:
         if state == "phone":
             phone = re.sub(r"[^0-9+]", "", value)
+            if not re.fullmatch(r"\+\d{7,15}", phone):
+                return await event.respond(
+                    "❌ Phone number format गलत है। Country code के साथ भेजें, जैसे `+919876543210`."
+                )
             sent = await client.send_code_request(phone)
             _session_login.update({"phone": phone, "phone_code_hash": sent.phone_code_hash, "state": "code"})
-            return await event.reply("📩 Telegram code भेजें। Spaces हों तो भी चलेगा।")
+            return await event.respond("📩 Telegram code भेजें। Spaces हों तो भी चलेगा।")
         if state == "code":
             code = re.sub(r"\D", "", value)
+            if not re.fullmatch(r"\d{4,8}", code):
+                return await event.respond("❌ OTP केवल digits में भेजें, जैसे `12345`।")
             try:
                 await client.sign_in(
                     phone=_session_login["phone"],
@@ -255,17 +263,17 @@ async def _session_input(event):
                 )
             except SessionPasswordNeededError:
                 _session_login["state"] = "password"
-                return await event.reply("🔑 2FA password भेजें।")
+                return await event.respond("🔑 2FA password भेजें।")
             except PhoneCodeInvalidError:
-                return await event.reply("❌ OTP गलत है। नया OTP मांगे बिना वही current code फिर भेजें।")
+                return await event.respond("❌ OTP गलत है या expire हो चुका है। `/sessionlogin` से नया OTP लें।")
             except PhoneCodeExpiredError:
                 _session_login.clear()
-                return await event.reply("❌ OTP expire हो गया। फिर `/sessionlogin` चलाएँ और नया code डालें।")
+                return await event.respond("❌ OTP expire हो गया। फिर `/sessionlogin` चलाएँ और नया code डालें।")
         elif state == "password":
             try:
                 await client.sign_in(password=value)
             except PasswordHashInvalidError:
-                return await event.reply("❌ 2FA password गलत है। सही password फिर भेजें।")
+                return await event.respond("❌ 2FA password गलत है। सही password फिर भेजें।")
         else:
             return
         session_string = client.session.save()
@@ -274,15 +282,30 @@ async def _session_input(event):
         os.chmod(Var.SESSION_FILE, 0o600)
         bot.user_client = client
         _session_login.clear()
-        await event.reply("✅ Telegram user session login सफल हुआ और protected local file में save है।")
-    except Exception:
-        LOGS.error(f"Session login step failed: {format_exc()}")
+        await event.respond("✅ Telegram user session login सफल हुआ और protected local file में save है।")
+    except PhoneNumberInvalidError:
+        return await event.respond(
+            "❌ Telegram ने phone number reject किया। वही number country code के साथ फिर भेजें।"
+        )
+    except FloodWaitError as exc:
         _session_login.clear()
         try:
             await client.disconnect()
         except Exception:
             pass
-        await event.reply("❌ Login failed या code/password गलत है। फिर `/sessionlogin` चलाएँ।")
+        return await event.respond(
+            f"❌ Telegram ने बहुत requests की वजह से रोक दिया। {exc.seconds} seconds बाद फिर `/sessionlogin` चलाएँ।"
+        )
+    except Exception as exc:
+        LOGS.error(f"Session login step failed at state={state}: {type(exc).__name__}: {format_exc()}")
+        _session_login.clear()
+        try:
+            await client.disconnect()
+        except Exception:
+            pass
+        await event.respond(
+            f"❌ Login step fail हुआ ({type(exc).__name__})। फिर `/sessionlogin` चलाएँ। Logs में exact कारण save है।"
+        )
 
 
 @bot.on(
