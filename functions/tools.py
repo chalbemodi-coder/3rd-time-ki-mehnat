@@ -177,6 +177,26 @@ class Tools:
         best_index = max(range(len(candidates)), key=lambda index: counts[index])
         return candidates[best_index]
 
+    async def _channel_matches_title(self, bot, chat_info, expected_title):
+        """Reject stale mappings when a Telegram channel was renamed to another anime."""
+        chat_id = (chat_info or {}).get("chat_id")
+        if not chat_id:
+            return False
+        try:
+            chat = await bot.pyro_client.get_chat(chat_id)
+            actual = canonical_channel_title(str(getattr(chat, "title", "")))
+            expected = canonical_channel_title(expected_title)
+            return actual == expected or actual.startswith(expected + " ")
+        except Exception:
+            return False
+
+    async def _valid_channel_candidates(self, bot, candidates, expected_title):
+        valid = []
+        for candidate in candidates:
+            if await self._channel_matches_title(bot, candidate, expected_title):
+                valid.append(candidate)
+        return valid
+
     async def get_chat_info(self, bot, anime_info, dB):
         try:
             data = anime_info.data or {}
@@ -185,10 +205,13 @@ class Tools:
             channel_title = canonical_channel_title(english_title or raw_title)
             channel_key = channel_title
             chat_info = await dB.get_anime_channel_info(channel_key)
+            if chat_info and not await self._channel_matches_title(bot, chat_info, channel_title):
+                chat_info = {}
             if not chat_info:
                 candidates = await dB.get_anime_channel_candidates_for_series(channel_title)
                 if not candidates and raw_title.casefold() != english_title.casefold():
                     candidates = await dB.get_anime_channel_candidates_for_series(raw_title)
+                candidates = await self._valid_channel_candidates(bot, candidates, channel_title)
                 chat_info = await self._most_established_channel(candidates)
             if not chat_info:
                 chat_id = await bot.create_channel(
