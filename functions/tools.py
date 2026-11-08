@@ -33,7 +33,7 @@ import aiohttp
 import requests
 from html_telegraph_poster import TelegraphPoster
 from telethon.errors.rpcerrorlist import MessageNotModifiedError
-from libs.anime_identity import canonical_channel_title
+from libs.anime_identity import canonical_channel_title, canonical_series_title
 from libs.subtitle_tracks import subtitle_mapping_args
 
 from functions.config import Var
@@ -184,9 +184,9 @@ class Tools:
             return False
         try:
             chat = await bot.pyro_client.get_chat(chat_id)
-            actual = canonical_channel_title(str(getattr(chat, "title", "")))
-            expected = canonical_channel_title(expected_title)
-            return actual == expected or actual.startswith(expected + " ")
+            actual = canonical_series_title(str(getattr(chat, "title", "")))
+            expected = canonical_series_title(expected_title)
+            return actual == expected
         except Exception:
             return False
 
